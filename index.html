@@ -177,13 +177,12 @@
             position: absolute;
             top: 50%;
             left: 50%;
-            transform: translate(-50%, -50%);
+            /* O transform inicial é feito via JS */
             max-width: 80%;
             max-height: 75%;
             object-fit: contain;
             filter: drop-shadow(0 10px 20px rgba(0,0,0,0.4));
             transition: transform 0.3s ease;
-            /* Estilos para arrastar */
             cursor: grab;
             user-select: none;
             -webkit-user-select: none;
@@ -191,7 +190,7 @@
         
         #ar-overlay-image.dragging {
             cursor: grabbing;
-            transition: none; /* Remove a transição durante o arraste para resposta imediata */
+            transition: none;
         }
         
         #ar-close-btn {
@@ -211,16 +210,70 @@
             align-items: center;
             justify-content: center;
             line-height: 1;
+            z-index: 10;
         }
+
+        .ar-controls {
+            position: absolute;
+            bottom: 90px;
+            left: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 10px 20px;
+            border-radius: 10px;
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .ar-controls input[type="range"] {
+            width: 100%;
+            cursor: pointer;
+            -webkit-appearance: none;
+            appearance: none;
+            background: transparent;
+        }
+        /* Estilização do slider para Webkit (Chrome, Safari) */
+        .ar-controls input[type="range"]::-webkit-slider-runnable-track {
+            height: 4px;
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 5px;
+        }
+        .ar-controls input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            margin-top: -6px; /* Centraliza o thumb na track */
+            width: 16px;
+            height: 16px;
+            background: var(--white);
+            border-radius: 50%;
+            border: 2px solid var(--primary-color);
+        }
+        /* Estilização para Firefox */
+         .ar-controls input[type="range"]::-moz-range-track {
+            height: 4px;
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 5px;
+        }
+        .ar-controls input[type="range"]::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            background: var(--white);
+            border-radius: 50%;
+            border: 2px solid var(--primary-color);
+        }
+
 
         .ar-ui-info {
             position: absolute;
             bottom: 30px;
             left: 20px;
-            right: 70px; /* Deixa espaço para o botão de reset */
+            right: 70px;
             background: rgba(0, 0, 0, 0.6);
             color: white;
-            padding: 15px;
+            padding: 10px 15px;
             border-radius: 10px;
             text-align: center;
             backdrop-filter: blur(5px);
@@ -229,10 +282,11 @@
 
         .ar-ui-info h3 {
             margin-bottom: 5px;
+            font-size: 1rem;
         }
 
         .ar-ui-info p {
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             opacity: 0.9;
         }
         
@@ -293,6 +347,7 @@
         <div class="products-grid" id="productsGrid"></div>
     </div>
 
+    <!-- Container da Visão de Realidade Aumentada -->
     <div id="ar-view" class="ar-view-container">
         <video id="ar-video" playsinline autoplay muted></video>
         <img id="ar-overlay-image" src="" alt="Imagem do prato em AR">
@@ -302,12 +357,19 @@
             <p id="ar-error-message"></p>
         </div>
 
+        <div class="ar-controls">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width: 20px; height: 20px; color: white; flex-shrink: 0;">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607zM10.5 7.5v6m3-3h-6" />
+            </svg>
+            <input type="range" id="ar-scale-slider" min="0.5" max="2.5" step="0.05" value="1">
+        </div>
+
         <div class="ar-ui-info">
             <h3 id="ar-product-name"></h3>
-            <p>Arraste o prato para ajustar a posição.</p>
+            <p>Arraste para mover e use o slider para ajustar o tamanho.</p>
         </div>
         
-        <button id="ar-reset-btn" onclick="resetImagePosition()" title="Recentralizar Imagem">
+        <button id="ar-reset-btn" onclick="resetImageTransform()" title="Recentralizar Imagem">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0011.664 0l3.181-3.183m-4.991-2.695v4.992h-4.992" />
             </svg>
@@ -336,21 +398,23 @@
         const arVideo = document.getElementById('ar-video');
         const arOverlayImage = document.getElementById('ar-overlay-image');
         const arProductName = document.getElementById('ar-product-name');
+        const arScaleSlider = document.getElementById('ar-scale-slider');
         const arError = document.getElementById('ar-error');
         const arErrorTitle = document.getElementById('ar-error-title');
         const arErrorMessage = document.getElementById('ar-error-message');
 
-        // --- VARIÁVEIS PARA ARRASTAR A IMAGEM ---
+        // --- VARIÁVEIS PARA TRANSFORMAÇÃO DA IMAGEM ---
         let isDragging = false;
         let xOffset = 0;
         let yOffset = 0;
         let initialX;
         let initialY;
+        let currentScale = 1;
 
         // --- INICIALIZAÇÃO ---
         document.addEventListener('DOMContentLoaded', () => {
             renderProducts();
-            setupDragListeners();
+            setupInteractionListeners();
         });
 
         function renderProducts() {
@@ -389,21 +453,25 @@
             renderProducts();
         }
 
-        // --- LÓGICA DE ARRASTAR ---
-        function setupDragListeners() {
+        // --- LÓGICA DE INTERAÇÃO (ARRASTAR E ZOOM) ---
+        function setupInteractionListeners() {
+            // Eventos de arraste
             arView.addEventListener('mousedown', dragStart);
             arView.addEventListener('touchstart', dragStart, { passive: false });
-
             arView.addEventListener('mouseup', dragEnd);
             arView.addEventListener('mouseleave', dragEnd);
             arView.addEventListener('touchend', dragEnd);
-
             arView.addEventListener('mousemove', drag);
             arView.addEventListener('touchmove', drag, { passive: false });
+
+            // Evento de zoom pelo slider
+            arScaleSlider.addEventListener('input', (e) => {
+                currentScale = e.target.value;
+                updateImageTransform(xOffset, yOffset, currentScale);
+            });
         }
 
         function dragStart(e) {
-            // Inicia o arraste apenas se o alvo for a imagem
             if (e.target === arOverlayImage) {
                 e.preventDefault();
                 isDragging = true;
@@ -419,7 +487,7 @@
             }
         }
 
-        function dragEnd(e) {
+        function dragEnd() {
             if (isDragging) {
                 isDragging = false;
                 arOverlayImage.classList.remove('dragging');
@@ -439,21 +507,25 @@
                 }
                 xOffset = currentX;
                 yOffset = currentY;
-                setTranslate(currentX, currentY, arOverlayImage);
+                updateImageTransform(xOffset, yOffset, currentScale);
             }
         }
 
-        function setTranslate(xPos, yPos, el) {
-            el.style.transform = `translate(-50%, -50%) translate(${xPos}px, ${yPos}px)`;
+        function updateImageTransform(x, y, scale) {
+            arOverlayImage.style.transform = `translate(-50%, -50%) translate(${x}px, ${y}px) scale(${scale})`;
         }
         
-        function resetImagePosition() {
+        function resetImageTransform() {
             xOffset = 0;
             yOffset = 0;
-            arOverlayImage.style.transition = 'transform 0.3s ease'; // Readiciona transição para suavidade
-            setTranslate(0, 0, arOverlayImage);
-            // Remove a transição após a animação para não afetar o próximo arraste
+            currentScale = 1;
+            arScaleSlider.value = 1;
+            
+            arOverlayImage.style.transition = 'transform 0.3s ease';
+            updateImageTransform(0, 0, 1);
+            
             setTimeout(() => {
+                // Remove a transição suave após o reset para não interferir no arraste
                 arOverlayImage.style.transition = 'none';
             }, 300);
         }
@@ -470,7 +542,7 @@
             const product = PRODUCTS.find(p => p.id === productId);
             if (!product) return;
 
-            resetImagePosition(); // Garante que a imagem comece centralizada
+            resetImageTransform(); // Garante que a imagem comece centralizada e com tamanho padrão
             document.body.classList.add('ar-active');
             arProductName.textContent = product.name;
             arOverlayImage.src = product.pngImage;
@@ -511,4 +583,3 @@
     </script>
 </body>
 </html>
-
